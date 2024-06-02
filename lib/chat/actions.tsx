@@ -16,7 +16,6 @@ import {
   nanoid
 } from '@/lib/utils';
 import { saveChat } from '@/app/actions';
-import { SpinnerMessage, UserMessage, BotMessage, SystemMessage } from '@/components/message';
 import { Chat, Message } from '@/lib/types';
 import { auth } from '@/auth';
 
@@ -25,6 +24,52 @@ async function submitForm(email: string, companyName: string, notes: string, add
 
   const aiState = getMutableAIState<typeof AI>();
 
+  // Confirm with the user before submitting the form
+  const confirmation = createStreamableUI(
+    <div className="inline-flex items-start gap-1 md:items-center">
+      <p className="mb-2">
+        Please confirm to submit the form with details for {companyName}.
+      </p>
+    </div>
+  );
+
+  const userConfirmed = await new Promise<boolean>((resolve) => {
+    aiState.update({
+      ...aiState.get(),
+      messages: [
+        ...aiState.get().messages,
+        {
+          id: nanoid(),
+          role: 'system',
+          content: `Please confirm to submit the form with details for ${companyName}.`
+        },
+        {
+          id: nanoid(),
+          role: 'user',
+          content: 'Yes, submit the form.'
+        }
+      ]
+    });
+
+    // Simulating user confirmation for demonstration purposes
+    setTimeout(() => resolve(true), 1000); // Replace with actual user confirmation logic
+  });
+
+  if (!userConfirmed) {
+    aiState.update({
+      ...aiState.get(),
+      messages: [
+        ...aiState.get().messages,
+        {
+          id: nanoid(),
+          role: 'system',
+          content: `Form submission for ${companyName} was cancelled.`
+        }
+      ]
+    });
+    return;
+  }
+
   const submitting = createStreamableUI(
     <div className="inline-flex items-start gap-1 md:items-center">
       <p className="mb-2">
@@ -32,8 +77,6 @@ async function submitForm(email: string, companyName: string, notes: string, add
       </p>
     </div>
   );
-
-  const systemMessage = createStreamableUI(null);
 
   runAsyncFnWithoutBlocking(async () => {
     await sleep(1000);
@@ -56,12 +99,6 @@ async function submitForm(email: string, companyName: string, notes: string, add
       </div>
     );
 
-    systemMessage.done(
-      <SystemMessage>
-        Form for {companyName} with email {email} and notes "{notes}" has been submitted. Additional info: {additionalInfo || 'None'}.
-      </SystemMessage>
-    );
-
     aiState.done({
       ...aiState.get(),
       messages: [
@@ -69,7 +106,7 @@ async function submitForm(email: string, companyName: string, notes: string, add
         {
           id: nanoid(),
           role: 'system',
-          content: `[Form for ${companyName} with email ${email} and notes "${notes}" has been submitted. Additional info: ${additionalInfo || 'None'}]`
+          content: `Form for ${companyName} with email ${email} and notes "${notes}" has been submitted. Additional info: ${additionalInfo || 'None'}.`
         }
       ]
     });
@@ -79,7 +116,7 @@ async function submitForm(email: string, companyName: string, notes: string, add
     submittingUI: submitting.value,
     newMessage: {
       id: nanoid(),
-      display: systemMessage.value
+      display: `Form for ${companyName} has been submitted.`
     }
   };
 }
@@ -101,17 +138,14 @@ async function submitUserMessage(content: string) {
     ]
   });
 
-  let textStream: undefined | ReturnType<typeof createStreamableValue<string>>;
-  let textNode: undefined | React.ReactNode;
-
   const result = await streamUI({
     model: openai('gpt-3.5-turbo'),
-    initial: <SpinnerMessage />,
+    initial: 'Processing...',
     system: `\
     You are an assistant for LawnLink Pro. Your task is to help users with their inquiries about LawnLink Pro services, including setting up their lawn care websites, understanding the services, and handling any other inquiries they may have.
     You should gather all necessary details and confirm them before forwarding any information to the development team.
     If the user wants to submit a form, ensure you collect their email, company name, notes about their needs, and any additional information they may have.
-    Once you have collected the information, use the \`submitForm\` function to forward the details and notify the user that the form has been submitted.`,
+    Once you have collected the information, confirm with the user before calling \`submitForm\` to forward the details and notify the user that the form has been submitted.`,
     messages: [
       ...aiState.get().messages.map((message: any) => ({
         role: message.role,
@@ -119,14 +153,8 @@ async function submitUserMessage(content: string) {
         name: message.name
       }))
     ],
-    text: ({ content, done, delta }) => {
-      if (!textStream) {
-        textStream = createStreamableValue('');
-        textNode = <BotMessage content={textStream.value} />;
-      }
-
+    text: ({ content, done }) => {
       if (done) {
-        textStream.done();
         aiState.done({
           ...aiState.get(),
           messages: [
@@ -138,11 +166,9 @@ async function submitUserMessage(content: string) {
             }
           ]
         });
-      } else {
-        textStream.update(delta);
       }
 
-      return textNode;
+      return content;
     }
   });
 
@@ -221,15 +247,266 @@ export const getUIStateFromAIState = (aiState: Chat) => {
     .filter(message => message.role !== 'system')
     .map((message, index) => ({
       id: `${aiState.chatId}-${index}`,
-      display:
-        message.role === 'user' ? (
-          <UserMessage>{message.content as string}</UserMessage>
-        ) : message.role === 'assistant' &&
-          typeof message.content === 'string' ? (
-          <BotMessage content={message.content} />
-        ) : null
+      display: message.role === 'user' ? message.content : message.role === 'assistant' ? message.content : null
     }));
 };
+
+
+
+
+
+// import 'server-only';
+
+// import {
+//   createAI,
+//   createStreamableUI,
+//   getMutableAIState,
+//   getAIState,
+//   createStreamableValue
+// } from 'ai/rsc';
+// import { openai } from '@ai-sdk/openai';
+
+// import { z } from 'zod';
+// import {
+//   runAsyncFnWithoutBlocking,
+//   sleep,
+//   nanoid
+// } from '@/lib/utils';
+// import { saveChat } from '@/app/actions';
+// import { SpinnerMessage, UserMessage, BotMessage, SystemMessage } from '@/components/message';
+// import { Chat, Message } from '@/lib/types';
+// import { auth } from '@/auth';
+
+// async function submitForm(email: string, companyName: string, notes: string, additionalInfo?: string) {
+//   'use server';
+
+//   const aiState = getMutableAIState<typeof AI>();
+
+//   const submitting = createStreamableUI(
+//     <div className="inline-flex items-start gap-1 md:items-center">
+//       <p className="mb-2">
+//         Submitting form with details for {companyName}...
+//       </p>
+//     </div>
+//   );
+
+//   const systemMessage = createStreamableUI(null);
+
+//   runAsyncFnWithoutBlocking(async () => {
+//     await sleep(1000);
+
+//     submitting.update(
+//       <div className="inline-flex items-start gap-1 md:items-center">
+//         <p className="mb-2">
+//           Submitting form with details for {companyName}... working on it...
+//         </p>
+//       </div>
+//     );
+
+//     await sleep(1000);
+
+//     submitting.done(
+//       <div>
+//         <p className="mb-2">
+//           Form for {companyName} has been successfully submitted.
+//         </p>
+//       </div>
+//     );
+
+//     systemMessage.done(
+//       <SystemMessage>
+//         Form for {companyName} with email {email} and notes "{notes}" has been submitted. Additional info: {additionalInfo || 'None'}.
+//       </SystemMessage>
+//     );
+
+//     aiState.done({
+//       ...aiState.get(),
+//       messages: [
+//         ...aiState.get().messages,
+//         {
+//           id: nanoid(),
+//           role: 'system',
+//           content: `[Form for ${companyName} with email ${email} and notes "${notes}" has been submitted. Additional info: ${additionalInfo || 'None'}]`
+//         }
+//       ]
+//     });
+//   });
+
+//   return {
+//     submittingUI: submitting.value,
+//     newMessage: {
+//       id: nanoid(),
+//       display: systemMessage.value
+//     }
+//   };
+// }
+
+// async function submitUserMessage(content: string) {
+//   'use server';
+
+//   const aiState = getMutableAIState<typeof AI>();
+
+//   aiState.update({
+//     ...aiState.get(),
+//     messages: [
+//       ...aiState.get().messages,
+//       {
+//         id: nanoid(),
+//         role: 'user',
+//         content
+//       }
+//     ]
+//   });
+
+//   let textStream: undefined | ReturnType<typeof createStreamableValue<string>>;
+//   let textNode: undefined | React.ReactNode;
+
+//   const result = await streamUI({
+//     model: openai('gpt-3.5-turbo'),
+//     initial: <SpinnerMessage />,
+//     system: `\
+//     You are an assistant for LawnLink Pro. Your task is to help users with their inquiries about LawnLink Pro services, including setting up their lawn care websites, understanding the services, and handling any other inquiries they may have.
+//     You should gather all necessary details and confirm them before forwarding any information to the development team.
+//     If the user wants to submit a form, ensure you collect their email, company name, notes about their needs, and any additional information they may have.
+//     Once you have collected the information, use the \`submitForm\` function to forward the details and notify the user that the form has been submitted.`,
+//     messages: [
+//       ...aiState.get().messages.map((message: any) => ({
+//         role: message.role,
+//         content: message.content,
+//         name: message.name
+//       }))
+//     ],
+//     text: ({ content, done, delta }) => {
+//       if (!textStream) {
+//         textStream = createStreamableValue('');
+//         textNode = <BotMessage content={textStream.value} />;
+//       }
+
+//       if (done) {
+//         textStream.done();
+//         aiState.done({
+//           ...aiState.get(),
+//           messages: [
+//             ...aiState.get().messages,
+//             {
+//               id: nanoid(),
+//               role: 'assistant',
+//               content
+//             }
+//           ]
+//         });
+//       } else {
+//         textStream.update(delta);
+//       }
+
+//       return textNode;
+//     }
+//   });
+
+//   return {
+//     id: nanoid(),
+//     display: result.value
+//   };
+// }
+
+// export type AIState = {
+//   chatId: string;
+//   messages: Message[];
+// };
+
+// export type UIState = {
+//   id: string;
+//   display: React.ReactNode;
+// }[];
+
+// export const AI = createAI<AIState, UIState>({
+//   actions: {
+//     submitUserMessage,
+//     submitForm
+//   },
+//   initialUIState: [],
+//   initialAIState: { chatId: nanoid(), messages: [] },
+//   onGetUIState: async () => {
+//     'use server';
+
+//     const session = await auth();
+
+//     if (session && session.user) {
+//       const aiState = getAIState();
+
+//       if (aiState) {
+//         const uiState = getUIStateFromAIState(aiState);
+//         return uiState;
+//       }
+//     } else {
+//       return;
+//     }
+//   },
+//   onSetAIState: async ({ state }) => {
+//     'use server';
+
+//     const session = await auth();
+
+//     if (session && session.user) {
+//       const { chatId, messages } = state;
+
+//       const createdAt = new Date();
+//       const userId = session.user.id as string;
+//       const path = `/chat/${chatId}`;
+
+//       const firstMessageContent = messages[0].content as string;
+//       const title = firstMessageContent.substring(0, 100);
+
+//       const chat: Chat = {
+//         id: chatId,
+//         title,
+//         userId,
+//         createdAt,
+//         messages,
+//         path
+//       };
+
+//       await saveChat(chat);
+//     } else {
+//       return;
+//     }
+//   }
+// });
+
+// export const getUIStateFromAIState = (aiState: Chat) => {
+//   return aiState.messages
+//     .filter(message => message.role !== 'system')
+//     .map((message, index) => ({
+//       id: `${aiState.chatId}-${index}`,
+//       display:
+//         message.role === 'user' ? (
+//           <UserMessage>{message.content as string}</UserMessage>
+//         ) : message.role === 'assistant' &&
+//           typeof message.content === 'string' ? (
+//           <BotMessage content={message.content} />
+//         ) : null
+//     }));
+// };
+
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
 
 
 // import 'server-only'
