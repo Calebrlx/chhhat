@@ -36,24 +36,24 @@ export function ChatPanel({
 
   const exampleMessages = [
     {
-      heading: 'What are the',
-      subheading: 'trending memecoins today?',
-      message: `What are the trending memecoins today?`
+      heading: 'How do I',
+      subheading: 'set up my lawn care website?',
+      message: 'How do I set up my lawn care website?',
     },
     {
-      heading: 'What is the price of',
-      subheading: '$DOGE right now?',
-      message: 'What is the price of $DOGE right now?'
+      heading: 'What is the cost of',
+      subheading: 'your services?',
+      message: 'What is the cost of your services?',
     },
     {
-      heading: 'I would like to buy',
-      subheading: '42 $DOGE',
-      message: `I would like to buy 42 $DOGE`
+      heading: 'Can I get a',
+      subheading: 'custom subdomain for my company?',
+      message: 'Can I get a custom subdomain for my company?',
     },
     {
-      heading: 'What are some',
-      subheading: `recent events about $DOGE?`,
-      message: `What are some recent events about $DOGE?`
+      heading: 'What are the benefits of',
+      subheading: 'using LawnLink Pro?',
+      message: 'What are the benefits of using LawnLink Pro?',
     }
   ]
 
